@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>StockSense AI — 智能补货助手</title>
+<style>
+  :root {
+    --bg: #0f172a; --surface: #1e293b; --border: #334155;
+    --text: #e2e8f0; --muted: #94a3b8; --accent: #38bdf8;
+    --green: #22c55e; --yellow: #eab308; --red: #ef4444;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  /* Header */
+  .header { background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); border-bottom: 1px solid var(--border); padding: 1.5rem 2rem; text-align: center; }
+  .header h1 { font-size: 1.8rem; font-weight: 700; }
+  .header h1 span { color: var(--accent); }
+  .header p { color: var(--muted); margin-top: .3rem; font-size: .95rem; }
+
+  /* Layout */
+  .container { max-width: 960px; margin: 0 auto; padding: 1.5rem; }
+  .grid { display: grid; grid-template-columns: 300px 1fr; gap: 1.5rem; }
+  @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } }
+
+  /* Card */
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.25rem; }
+  .card h2 { font-size: 1.1rem; margin-bottom: 1rem; display: flex; align-items: center; gap: .5rem; }
+
+  /* Form elements */
+  label { display: block; font-size: .85rem; color: var(--muted); margin-bottom: .3rem; margin-top: .75rem; }
+  input, select { width: 100%; padding: .55rem .75rem; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: .9rem; outline: none; }
+  input:focus, select:focus { border-color: var(--accent); }
+  .row { display: flex; gap: .75rem; }
+  .row > * { flex: 1; }
+
+  /* Buttons */
+  .btn { display: inline-block; width: 100%; padding: .6rem; border: none; border-radius: 8px; font-size: .9rem; font-weight: 600; cursor: pointer; margin-top: .75rem; transition: opacity .2s; }
+  .btn:hover { opacity: .85; }
+  .btn-primary { background: var(--accent); color: #0f172a; }
+  .btn-success { background: var(--green); color: #0f172a; }
+  .btn-danger { background: var(--red); color: #fff; }
+  .btn-sm { padding: .35rem .6rem; width: auto; margin-top: 0; font-size: .8rem; border-radius: 6px; }
+
+  /* Tabs */
+  .tabs { display: flex; gap: .5rem; margin-bottom: 1.25rem; }
+  .tab { padding: .5rem 1rem; border-radius: 8px; cursor: pointer; font-size: .9rem; font-weight: 500; background: transparent; border: 1px solid var(--border); color: var(--muted); transition: all .2s; }
+  .tab.active { background: var(--accent); color: #0f172a; border-color: var(--accent); }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  /* Metrics */
+  .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: .75rem; margin: 1rem 0; }
+  .metric { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 1rem; text-align: center; }
+  .metric .value { font-size: 1.6rem; font-weight: 700; color: var(--accent); }
+  .metric .label { font-size: .8rem; color: var(--muted); margin-top: .25rem; }
+
+  /* Advice box */
+  .advice { padding: 1.25rem; border-radius: 10px; margin: 1rem 0; font-size: 1.1rem; font-weight: 600; text-align: center; }
+  .advice.urgent { background: rgba(239,68,68,.15); border: 1px solid var(--red); color: var(--red); }
+  .advice.warning { background: rgba(234,179,8,.12); border: 1px solid var(--yellow); color: var(--yellow); }
+  .advice.ok { background: rgba(34,197,94,.12); border: 1px solid var(--green); color: var(--green); }
+  .advice.unknown { background: rgba(148,163,184,.1); border: 1px solid var(--muted); color: var(--muted); }
+
+  /* Table */
+  table { width: 100%; border-collapse: collapse; font-size: .85rem; margin-top: .75rem; }
+  th, td { padding: .5rem .75rem; text-align: left; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 500; }
+
+  /* Product list */
+  .product-item { display: flex; justify-content: space-between; align-items: center; padding: .6rem .75rem; border-radius: 8px; cursor: pointer; margin-bottom: .35rem; transition: background .15s; }
+  .product-item:hover { background: var(--bg); }
+  .product-item.selected { background: var(--accent); color: #0f172a; }
+  .product-item.selected .pi-detail { color: #0f172a99; }
+  .pi-name { font-weight: 600; font-size: .9rem; }
+  .pi-detail { font-size: .78rem; color: var(--muted); }
+
+  .empty { text-align: center; color: var(--muted); padding: 2rem; font-size: .9rem; }
+
+  /* Toast */
+  .toast { position: fixed; top: 1rem; right: 1rem; background: var(--green); color: #0f172a; padding: .6rem 1.2rem; border-radius: 8px; font-weight: 600; font-size: .9rem; opacity: 0; transition: opacity .3s; z-index: 99; }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>📦 <span>StockSense AI</span></h1>
+  <p>智能补货决策助手 · 纯前端 Demo</p>
+</div>
+
+<div class="container">
+<div class="grid">
+
+  <!-- ===== 左侧面板 ===== -->
+  <div>
+    <div class="card">
+      <h2>➕ 添加商品</h2>
+      <label>商品名称</label>
+      <input id="pName" placeholder="如：牛奶">
+      <div class="row">
+        <div><label>单位</label><input id="pUnit" value="件"></div>
+        <div><label>库存</label><input id="pStock" type="number" value="0" min="0"></div>
+      </div>
+      <label>价格 (¥)</label>
+      <input id="pPrice" type="number" value="0" min="0" step="0.1">
+      <button class="btn btn-primary" onclick="addProduct()">添加商品</button>
+    </div>
+
+    <div class="card" style="margin-top:1rem;">
+      <h2>📋 商品列表</h2>
+      <div id="productList"></div>
+    </div>
+  </div>
+
+  <!-- ===== 右侧主区域 ===== -->
+  <div>
+    <div id="mainArea"></div>
+  </div>
+
+</div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── Storage ──────────────────────────────────────────────
+
+const STORAGE_KEY = 'stocksense_data';
+
+function loadData() {
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if (!raw) return { products: [], purchases: [], nextPid: 1, nextHid: 1 };
+  return JSON.parse(raw);
+}
+
+function saveData(data) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+}
+
+let data = loadData();
+let selectedPid = data.products.length ? data.products[0].id : null;
+let activeTab = 'purchase';
+
+// ── Toast ────────────────────────────────────────────────
+
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2000);
+}
+
+// ── Products ─────────────────────────────────────────────
+
+function addProduct() {
+  const name = document.getElementById('pName').value.trim();
+  if (!name) return toast('请输入商品名称');
+  if (data.products.some(p => p.name === name)) return toast('商品已存在');
+
+  data.products.push({
+    id: data.nextPid++,
+    name,
+    unit: document.getElementById('pUnit').value || '件',
+    stock: parseInt(document.getElementById('pStock').value) || 0,
+    price: parseFloat(document.getElementById('pPrice').value) || 0,
+  });
+  saveData(data);
+  document.getElementById('pName').value = '';
+  selectedPid = data.products[data.products.length - 1].id;
+  render();
+  toast(`已添加「${name}」`);
+}
+
+function selectProduct(id) {
+  selectedPid = id;
+  render();
+}
+
+function deleteProduct(id, e) {
+  e.stopPropagation();
+  if (!confirm('确定删除此商品及其购买记录？')) return;
+  data.products = data.products.filter(p => p.id !== id);
+  data.purchases = data.purchases.filter(h => h.product_id !== id);
+  saveData(data);
+  if (selectedPid === id) selectedPid = data.products.length ? data.products[0].id : null;
+  render();
+}
+
+// ── Purchases ────────────────────────────────────────────
+
+function addPurchase() {
+  const qty = parseInt(document.getElementById('hQty').value) || 1;
+  const dt = document.getElementById('hDate').value;
+  if (!dt) return toast('请选择日期');
+
+  data.purchases.push({ id: data.nextHid++, product_id: selectedPid, quantity: qty, purchased_at: dt });
+
+  const p = data.products.find(p => p.id === selectedPid);
+  if (p) p.stock += qty;
+
+  saveData(data);
+  render();
+  toast(`已记录购买 ${qty} ${p ? p.unit : '件'}`);
+}
+
+function updateStock() {
+  const p = data.products.find(p => p.id === selectedPid);
+  if (!p) return;
+  p.stock = parseInt(document.getElementById('uStock').value) || 0;
+  saveData(data); render(); toast('库存已更新');
+}
+
+function updatePrice() {
+  const p = data.products.find(p => p.id === selectedPid);
+  if (!p) return;
+  p.price = parseFloat(document.getElementById('uPrice').value) || 0;
+  saveData(data); render(); toast('价格已更新');
+}
+
+// ── Logic (same as backend) ──────────────────────────────
+
+function getPurchases(pid) {
+  return data.purchases.filter(h => h.product_id === pid).sort((a, b) => a.purchased_at.localeCompare(b.purchased_at));
+}
+
+function avgCycle(pid) {
+  const list = getPurchases(pid);
+  if (list.length < 2) return null;
+  const dates = list.map(h => new Date(h.purchased_at)).sort((a, b) => a - b);
+  let total = 0;
+  for (let i = 1; i < dates.length; i++) total += (dates[i] - dates[i - 1]) / 86400000;
+  return total / (dates.length - 1);
+}
+
+function avgQty(pid) {
+  const list = getPurchases(pid);
+  if (!list.length) return 0;
+  return list.reduce((s, h) => s + h.quantity, 0) / list.length;
+}
+
+function predict(pid) {
+  const p = data.products.find(p => p.id === pid);
+  if (!p) return null;
+  const cycle = avgCycle(pid);
+  const qty = avgQty(pid);
+  if (!cycle || cycle === 0 || qty === 0) return { product: p, days: null };
+  const daily = qty / cycle;
+  const days = p.stock / daily;
+  return { product: p, cycle: Math.round(cycle * 10) / 10, daily: Math.round(daily * 100) / 100, days: Math.round(days * 10) / 10 };
+}
+
+function recommend(pid) {
+  const pred = predict(pid);
+  if (!pred) return null;
+  const p = pred.product;
+  const days = pred.days;
+
+  if (days === null) return { ...pred, advice: '⚪ 数据不足，请多记录几次购买', level: 'unknown' };
+  if (days < 3) return { ...pred, advice: '🔴 立即购买！库存即将耗尽', level: 'urgent' };
+  if (days < 7) return { ...pred, advice: '🟡 建议近期购买，库存偏低', level: 'warning' };
+  return { ...pred, advice: '🟢 库存充足，暂不需要补货', level: 'ok' };
+}
+
+// ── Render ───────────────────────────────────────────────
+
+function switchTab(tab) {
+  activeTab = tab;
+  render();
+}
+
+function render() {
+  // Product list
+  const listEl = document.getElementById('productList');
+  if (!data.products.length) {
+    listEl.innerHTML = '<div class="empty">暂无商品，请先添加</div>';
+  } else {
+    listEl.innerHTML = data.products.map(p => `
+      <div class="product-item ${p.id === selectedPid ? 'selected' : ''}" onclick="selectProduct(${p.id})">
+        <div>
+          <div class="pi-name">${esc(p.name)}</div>
+          <div class="pi-detail">库存 ${p.stock} ${esc(p.unit)} · ¥${p.price}</div>
+        </div>
+        <button class="btn btn-danger btn-sm" onclick="deleteProduct(${p.id}, event)">删除</button>
+      </div>
+    `).join('');
+  }
+
+  // Main area
+  const main = document.getElementById('mainArea');
+  if (!selectedPid || !data.products.find(p => p.id === selectedPid)) {
+    main.innerHTML = '<div class="card"><div class="empty">← 请选择或添加一个商品</div></div>';
+    return;
+  }
+
+  const p = data.products.find(p => p.id === selectedPid);
+  const today = new Date().toISOString().slice(0, 10);
+
+  main.innerHTML = `
+    <div class="tabs">
+      <div class="tab ${activeTab === 'purchase' ? 'active' : ''}" onclick="switchTab('purchase')">📝 记录购买</div>
+      <div class="tab ${activeTab === 'predict' ? 'active' : ''}" onclick="switchTab('predict')">📊 库存预测</div>
+      <div class="tab ${activeTab === 'recommend' ? 'active' : ''}" onclick="switchTab('recommend')">💡 补货建议</div>
+    </div>
+    <div class="card">
+      ${activeTab === 'purchase' ? renderPurchase(p, today) : ''}
+      ${activeTab === 'predict' ? renderPredict(p) : ''}
+      ${activeTab === 'recommend' ? renderRecommend(p) : ''}
+    </div>
+  `;
+}
+
+function renderPurchase(p, today) {
+  const history = getPurchases(p.id).reverse();
+  return `
+    <h2>记录一次购买</h2>
+    <div class="row">
+      <div><label>购买数量</label><input id="hQty" type="number" value="1" min="1"></div>
+      <div><label>购买日期</label><input id="hDate" type="date" value="${today}"></div>
+    </div>
+    <button class="btn btn-success" onclick="addPurchase()">记录购买</button>
+
+    <h2 style="margin-top:1.5rem;">购买历史</h2>
+    ${history.length ? `
+      <table>
+        <thead><tr><th>日期</th><th>数量</th></tr></thead>
+        <tbody>${history.map(h => `<tr><td>${h.purchased_at}</td><td>${h.quantity} ${esc(p.unit)}</td></tr>`).join('')}</tbody>
+      </table>
+    ` : '<div class="empty">暂无购买记录</div>'}
+
+    <h2 style="margin-top:1.5rem;">更新信息</h2>
+    <div class="row">
+      <div>
+        <label>修正库存</label>
+        <input id="uStock" type="number" value="${p.stock}" min="0">
+        <button class="btn btn-primary" onclick="updateStock()" style="margin-top:.5rem">更新库存</button>
+      </div>
+      <div>
+        <label>更新价格</label>
+        <input id="uPrice" type="number" value="${p.price}" min="0" step="0.1">
+        <button class="btn btn-primary" onclick="updatePrice()" style="margin-top:.5rem">更新价格</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderPredict(p) {
+  const pred = predict(p.id);
+  if (!pred || pred.days === null) {
+    return `<h2>库存剩余天数预测</h2><div class="advice unknown">⚪ 历史数据不足（至少需要 2 条不同日期的购买记录）</div>`;
+  }
+  return `
+    <h2>库存剩余天数预测</h2>
+    <div class="metrics">
+      <div class="metric"><div class="value">${p.stock}</div><div class="label">当前库存 (${esc(p.unit)})</div></div>
+      <div class="metric"><div class="value">${pred.daily}</div><div class="label">日均消耗 (${esc(p.unit)})</div></div>
+      <div class="metric"><div class="value" style="color:${pred.days < 3 ? 'var(--red)' : pred.days < 7 ? 'var(--yellow)' : 'var(--green)'}">${pred.days}</div><div class="label">预计可用天数</div></div>
+    </div>
+    <p style="color:var(--muted);font-size:.85rem;margin-top:.5rem;">平均购买周期：${pred.cycle} 天</p>
+  `;
+}
+
+function renderRecommend(p) {
+  const rec = recommend(p.id);
+  if (!rec) return '<div class="empty">无数据</div>';
+  return `
+    <h2>智能补货建议</h2>
+    <div class="advice ${rec.level}">${rec.advice}</div>
+    ${rec.days !== null ? `
+      <div class="metrics">
+        <div class="metric"><div class="value">${rec.days}</div><div class="label">剩余天数</div></div>
+        <div class="metric"><div class="value">¥${rec.product.price}</div><div class="label">当前价格</div></div>
+        <div class="metric"><div class="value">${rec.daily}</div><div class="label">日均消耗</div></div>
+      </div>
+    ` : ''}
+  `;
+}
+
+function esc(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+// Initial render
+render();
+</script>
+</body>
+</html>
